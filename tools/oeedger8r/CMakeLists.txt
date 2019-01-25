@@ -1,12 +1,6 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 
-if (WIN32)
-    set(BINARY ${OE_BINDIR}/oeedger8r.exe)
-else()
-    set(BINARY ${OE_BINDIR}/oeedger8r)
-endif()
-
 # NOTE: The custom commands below first copy the input files to the
 # build directory and then invoke the OCaml tools because those tools
 # do not emit to the current working directory, they always emit to
@@ -37,8 +31,9 @@ add_custom_command(
   DEPENDS intel/Parser.mly)
 
 # Compile
+set(OEEDGER8R oeedger8r${CMAKE_EXECUTABLE_SUFFIX})
 add_custom_command(
-    OUTPUT ${BINARY}
+    OUTPUT ${OEEDGER8R}
     COMMAND ocamlopt -c -bin-annot -I . -o Ast.cmx          ${CMAKE_CURRENT_SOURCE_DIR}/intel/Ast.ml
     COMMAND ocamlopt -c -bin-annot -I . -o Util.cmx         ${CMAKE_CURRENT_SOURCE_DIR}/intel/Util.ml
     COMMAND ocamlopt -c -bin-annot -I . -o SimpleStack.cmx  ${CMAKE_CURRENT_SOURCE_DIR}/intel/SimpleStack.ml
@@ -52,7 +47,7 @@ add_custom_command(
     COMMAND ocamlopt -c -bin-annot -I . -o main.cmx         ${CMAKE_CURRENT_SOURCE_DIR}/main.ml
     COMMAND ocamlopt str.cmxa unix.cmxa Ast.cmx Util.cmx SimpleStack.cmx Plugin.cmx
                      Preprocessor.cmx Parser.cmx Lexer.cmx CodeGen.cmx Emitter.cmx main.cmx
-                     -o ${BINARY}
+                     -o ${OEEDGER8R}
 
     # Add dependency to generated Lexer and Parser, and all of the sources.
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/Lexer.ml
@@ -69,7 +64,14 @@ add_custom_command(
             intel/Util.ml
 )
 
-add_custom_target(oeedger8r ALL DEPENDS ${BINARY})
+add_executable(oeedger8r IMPORTED GLOBAL)
+set_target_properties(oeedger8r PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/${OEEDGER8R})
+# This is a hack to force the edger8r to be created, since CMake does
+# not allow us to set a file dependency on an imported executable, yet
+# setting a target dependency here yields a circular dependency error
+# (indicating CMake is aware of the transitive file dependency, but
+# unfortunately fails to act on it to create the file).
+add_custom_target(oeedger8r_target ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${OEEDGER8R})
 
-# install rule
-install (PROGRAMS ${BINARY} DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS oeedger8r EXPORT openenclave-targets
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
